@@ -4,9 +4,10 @@ pipeline {
         // options
     //}
 
-    //parameters {
+    parameters {
         // Parameters
-    //}
+       booleanParam(name: 'destroy', defaultValue: false, description: 'True for destroy and flase for create')
+    }
 
     environment {
         // environment variables
