@@ -1,4 +1,6 @@
-# Création du VPC
+# 🌐 VPC & Réseau
+# ----------------------------
+
 resource "aws_vpc" "main_vpc" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
@@ -32,76 +34,150 @@ resource "aws_subnet" "private_subnet" {
   tags = { Name = "private-subnet" }
 }
 
-# Internet Gateway pour accès public
+# ----------------------------
+# 🚀 Internet Gateway & NAT Gateway
+# ----------------------------
+
 resource "aws_internet_gateway" "main_igw" {
   vpc_id = aws_vpc.main_vpc.id
   tags = { Name = "main-internet-gateway" }
 }
 
-# Elastic IPs
 resource "aws_eip" "nat_eip" { domain = "vpc" }
 resource "aws_eip" "eip_secondary" { domain = "vpc" }
 
-# NAT Gateway pour accès privé
 resource "aws_nat_gateway" "nat_gateway" {
   allocation_id = aws_eip.nat_eip.id
   subnet_id     = aws_subnet.public_subnet_1.id
   tags = { Name = "nat-gateway" }
 }
 
-# Table de routage publique
-resource "aws_route_table" "public_rt" {
-  vpc_id = aws_vpc.main_vpc.id
-  tags = { Name = "public-route-table" }
+# ----------------------------
+# 🌐 Load Balancer (ALB) avec conditions simples
+# ----------------------------
+
+resource "aws_lb" "app_lb" {
+  name               = "my-app-load-balancer"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.lb_sg.id]
+  subnets            = [
+    aws_subnet.public_subnet_1.id,
+    aws_subnet.public_subnet_2.id
+  ]
+  enable_deletion_protection = false
+  tags = { Name = "my-app-load-balancer" }
 }
 
-# Route vers Internet via Internet Gateway
-resource "aws_route" "public_route" {
-  route_table_id         = aws_route_table.public_rt.id
-  destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.main_igw.id
+# ----------------------------
+# 🎯 Groupes Cibles
+# ----------------------------
+
+resource "aws_lb_target_group" "target_group_app1" {
+  name        = "target-group-app1"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main_vpc.id
+
+  health_check {
+    path                = "/health"
+    protocol            = "HTTP"
+  }
+
+  tags = { Name = "target-group-app1" }
 }
 
-# Association de la table publique aux sous-réseaux publics
-resource "aws_route_table_association" "public_subnet_1_association" {
-  subnet_id      = aws_subnet.public_subnet_1.id
-  route_table_id = aws_route_table.public_rt.id
+resource "aws_lb_target_group" "target_group_app2" {
+  name        = "target-group-app2"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main_vpc.id
+
+  health_check {
+    path                = "/health"
+    protocol            = "HTTP"
+  }
+
+  tags = { Name = "target-group-app2" }
 }
 
-resource "aws_route_table_association" "public_subnet_2_association" {
-  subnet_id      = aws_subnet.public_subnet_2.id
-  route_table_id = aws_route_table.public_rt.id
+resource "aws_lb_target_group" "target_group_default" {
+  name        = "target-group-default"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main_vpc.id
+
+  health_check {
+    path                = "/"
+    protocol            = "HTTP"
+  }
+
+  tags = { Name = "target-group-default" }
 }
 
-# Table de routage privée
-resource "aws_route_table" "private_rt" {
-  vpc_id = aws_vpc.main_vpc.id
-  tags = { Name = "private-route-table" }
+# ----------------------------
+# 📜 Listeners avec Conditions Simples
+# ----------------------------
+
+resource "aws_lb_listener" "app_lb_listener" {
+  load_balancer_arn = aws_lb.app_lb.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type = "forward"
+    target_group_arn = aws_lb_target_group.target_group_default.arn
+  }
 }
 
-# Route vers Internet via NAT Gateway (sortie privée)
-resource "aws_route" "private_route" {
-  route_table_id         = aws_route_table.private_rt.id
-  destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.nat_gateway.id
+# Règle conditionnelle pour /app1
+resource "aws_lb_listener_rule" "rule_app1" {
+  listener_arn = aws_lb_listener.app_lb_listener.arn
+  priority     = 10
+
+  condition {
+    path_pattern {
+      values = ["/app1/*"]
+    }
+  }
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.target_group_app1.arn
+  }
 }
 
-# Association de la table privée aux sous-réseaux privés
-resource "aws_route_table_association" "private_subnet_association" {
-  subnet_id      = aws_subnet.private_subnet.id
-  route_table_id = aws_route_table.private_rt.id
+# Règle conditionnelle pour /app2
+resource "aws_lb_listener_rule" "rule_app2" {
+  listener_arn = aws_lb_listener.app_lb_listener.arn
+  priority     = 20
+
+  condition {
+    path_pattern {
+      values = ["/app2/*"]
+    }
+  }
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.target_group_app2.arn
+  }
 }
 
-resource "aws_security_group" "ssh_access_sg" {
-  name        = "ssh-access-sg"
-  description = "Allow SSH access within VPC"
+# ----------------------------
+# 🔒 Security Group pour Load Balancer
+# ----------------------------
+
+resource "aws_security_group" "lb_sg" {
+  name        = "lb-security-group"
+  description = "Security group for ALB"
   vpc_id      = aws_vpc.main_vpc.id
 
   ingress {
-    from_port   = 22
-    to_port     = 22
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]  # Limite l'accès SSH au réseau interne
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -111,5 +187,5 @@ resource "aws_security_group" "ssh_access_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Name = "ssh-access-sg" }
+  tags = { Name = "lb-security-group" }
 }
