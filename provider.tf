@@ -9,7 +9,7 @@ backend "s3" {
     bucket         = "totobucket-terraform-state-bucket"
     key            = "terraform/state"
     region         = "us-east-1"
-    dynamodb_table = "toto_table"
+    dynamodb_table = "toto_table" # toto
   }
 }
 
