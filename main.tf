@@ -1,7 +1,3 @@
-# --------------------
-# 🚀 VPC & Réseau
-# --------------------
-
 # Création du VPC
 resource "aws_vpc" "main_vpc" {
   cidr_block           = "10.0.0.0/16"
@@ -36,10 +32,6 @@ resource "aws_subnet" "private_subnet" {
   tags = { Name = "private-subnet" }
 }
 
-# --------------------
-# 🌐 Internet Gateway & NAT Gateway
-# --------------------
-
 # Internet Gateway pour accès public
 resource "aws_internet_gateway" "main_igw" {
   vpc_id = aws_vpc.main_vpc.id
@@ -56,10 +48,6 @@ resource "aws_nat_gateway" "nat_gateway" {
   subnet_id     = aws_subnet.public_subnet_1.id
   tags = { Name = "nat-gateway" }
 }
-
-# --------------------
-# 🛣️ Tables de Routage
-# --------------------
 
 # Table de routage publique
 resource "aws_route_table" "public_rt" {
@@ -103,10 +91,6 @@ resource "aws_route_table_association" "private_subnet_association" {
   subnet_id      = aws_subnet.private_subnet.id
   route_table_id = aws_route_table.private_rt.id
 }
-
-# --------------------
-# 🔒 Security Groups (SSH uniquement)
-# --------------------
 
 resource "aws_security_group" "ssh_access_sg" {
   name        = "ssh-access-sg"
