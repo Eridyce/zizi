@@ -27,7 +27,7 @@ resource "aws_subnet" "public_subnet_2" {
   tags = { Name = "public-subnet-2" }
 }
 
-# Sous-réseaux privés
+# Sous-réseau privé
 resource "aws_subnet" "private_subnet" {
   vpc_id            = aws_vpc.main_vpc.id
   cidr_block        = "10.0.1.0/24"
@@ -105,10 +105,9 @@ resource "aws_route_table_association" "private_subnet_association" {
 }
 
 # --------------------
-# 🔒 Security Groups
+# 🔒 Security Groups (SSH uniquement)
 # --------------------
 
-# SG pour accès SSH interne uniquement
 resource "aws_security_group" "ssh_access_sg" {
   name        = "ssh-access-sg"
   description = "Allow SSH access within VPC"
@@ -129,53 +128,4 @@ resource "aws_security_group" "ssh_access_sg" {
   }
 
   tags = { Name = "ssh-access-sg" }
-}
-
-# --------------------
-# 🖥️ Instances EC2
-# --------------------
-
-# Utiliser une clé SSH existante
-data "aws_key_pair" "vockey" { key_name = "vockey" }
-
-# Instance EC2 publique (accès SSH autorisé) - Dans le premier sous-réseau
-resource "aws_instance" "ec2_public_1" {
-  ami           = "ami-0c02fb55956c7d316"
-  instance_type = "t2.micro"
-  key_name      = data.aws_key_pair.vockey.key_name
-  subnet_id     = aws_subnet.public_subnet_1.id
-
-  associate_public_ip_address = true
-
-  vpc_security_group_ids = [aws_security_group.ssh_access_sg.id]
-
-  tags = { Name = "ec2-public-1" }
-}
-
-# Instance EC2 publique (accès SSH autorisé) - Dans le deuxième sous-réseau
-resource "aws_instance" "ec2_public_2" {
-  ami           = "ami-0c02fb55956c7d316"
-  instance_type = "t2.micro"
-  key_name      = data.aws_key_pair.vockey.key_name
-  subnet_id     = aws_subnet.public_subnet_2.id
-
-  associate_public_ip_address = true
-
-  vpc_security_group_ids = [aws_security_group.ssh_access_sg.id]
-
-  tags = { Name = "ec2-public-2" }
-}
-
-# Instance EC2 privée (accès uniquement via SSH interne)
-resource "aws_instance" "ec2_private" {
-  ami           = "ami-0c02fb55956c7d316"
-  instance_type = "t2.micro"
-  key_name      = data.aws_key_pair.vockey.key_name
-  subnet_id     = aws_subnet.private_subnet.id
-
-  associate_public_ip_address = false
-
-  vpc_security_group_ids = [aws_security_group.ssh_access_sg.id]
-
-  tags = { Name = "ec2-private" }
 }
