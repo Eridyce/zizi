@@ -1,3 +1,7 @@
+# --------------------
+# 🚀 VPC & Réseau
+# --------------------
+
 # Création du VPC
 resource "aws_vpc" "main_vpc" {
   cidr_block           = "10.0.0.0/16"
@@ -7,12 +11,20 @@ resource "aws_vpc" "main_vpc" {
 }
 
 # Sous-réseaux publics
-resource "aws_subnet" "public_subnet" {
+resource "aws_subnet" "public_subnet_1" {
   vpc_id                  = aws_vpc.main_vpc.id
   cidr_block              = "10.0.3.0/24"
   availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
-  tags = { Name = "public-subnet" }
+  tags = { Name = "public-subnet-1" }
+}
+
+resource "aws_subnet" "public_subnet_2" {
+  vpc_id                  = aws_vpc.main_vpc.id
+  cidr_block              = "10.0.4.0/24"
+  availability_zone       = "us-east-1b"
+  map_public_ip_on_launch = true
+  tags = { Name = "public-subnet-2" }
 }
 
 # Sous-réseaux privés
@@ -34,11 +46,14 @@ resource "aws_internet_gateway" "main_igw" {
   tags = { Name = "main-internet-gateway" }
 }
 
-# NAT Gateway pour accès privé
+# Elastic IPs
 resource "aws_eip" "nat_eip" { domain = "vpc" }
+resource "aws_eip" "eip_secondary" { domain = "vpc" }
+
+# NAT Gateway pour accès privé
 resource "aws_nat_gateway" "nat_gateway" {
   allocation_id = aws_eip.nat_eip.id
-  subnet_id     = aws_subnet.public_subnet.id
+  subnet_id     = aws_subnet.public_subnet_1.id
   tags = { Name = "nat-gateway" }
 }
 
@@ -60,8 +75,13 @@ resource "aws_route" "public_route" {
 }
 
 # Association de la table publique aux sous-réseaux publics
-resource "aws_route_table_association" "public_subnet_association" {
-  subnet_id      = aws_subnet.public_subnet.id
+resource "aws_route_table_association" "public_subnet_1_association" {
+  subnet_id      = aws_subnet.public_subnet_1.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+resource "aws_route_table_association" "public_subnet_2_association" {
+  subnet_id      = aws_subnet.public_subnet_2.id
   route_table_id = aws_route_table.public_rt.id
 }
 
@@ -118,18 +138,32 @@ resource "aws_security_group" "ssh_access_sg" {
 # Utiliser une clé SSH existante
 data "aws_key_pair" "vockey" { key_name = "vockey" }
 
-# Instance EC2 publique (accès SSH autorisé)
-resource "aws_instance" "ec2_public" {
+# Instance EC2 publique (accès SSH autorisé) - Dans le premier sous-réseau
+resource "aws_instance" "ec2_public_1" {
   ami           = "ami-0c02fb55956c7d316"
   instance_type = "t2.micro"
   key_name      = data.aws_key_pair.vockey.key_name
-  subnet_id     = aws_subnet.public_subnet.id
+  subnet_id     = aws_subnet.public_subnet_1.id
 
   associate_public_ip_address = true
 
   vpc_security_group_ids = [aws_security_group.ssh_access_sg.id]
 
-  tags = { Name = "ec2-public" }
+  tags = { Name = "ec2-public-1" }
+}
+
+# Instance EC2 publique (accès SSH autorisé) - Dans le deuxième sous-réseau
+resource "aws_instance" "ec2_public_2" {
+  ami           = "ami-0c02fb55956c7d316"
+  instance_type = "t2.micro"
+  key_name      = data.aws_key_pair.vockey.key_name
+  subnet_id     = aws_subnet.public_subnet_2.id
+
+  associate_public_ip_address = true
+
+  vpc_security_group_ids = [aws_security_group.ssh_access_sg.id]
+
+  tags = { Name = "ec2-public-2" }
 }
 
 # Instance EC2 privée (accès uniquement via SSH interne)
